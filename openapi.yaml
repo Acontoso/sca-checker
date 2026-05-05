@@ -1,0 +1,393 @@
+openapi: 3.0.0
+info:
+  title: FastAPI Lambda - API for Software Composition checks
+  version: 0.1.0
+  description: A starter FastAPI service that can run on AWS Lambda via Mangum.
+
+servers:
+  - url: https://scaapi.example.com
+    description: AWS API Gateway URL
+
+paths:
+  /:
+    get:
+      summary: Root Route
+      operationId: root_route__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /health:
+    get:
+      summary: Health Route
+      operationId: health_route_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /sca/check:
+    post:
+      summary: Sca Check Route
+      operationId: sca_check_route_sca_check_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SCARequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/DiscoverPackageResponse'
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/DiscoverPackageResponse'
+                title: Response Sca Check Route Sca Check Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - HTTPBearer: []
+  /sca/enrich:
+    post:
+      summary: Sca Enrich Route
+      operationId: sca_enrich_route_sca_enrich_post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SCAEnrichRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/MaliciousPackageResponse'
+                  - $ref: '#/components/schemas/CleanPackageResponse'
+                title: Response Sca Enrich Route Sca Enrich Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+        - HTTPBearer: []
+components:
+  schemas:
+    BusinessUnit:
+      type: string
+      enum:
+        - all
+      title: BusinessUnit
+    CleanPackageResponse:
+      type: object
+      title: CleanPackageResponse
+      description: Response when a package is not found in the malicious database.
+      properties:
+        malicious:
+          type: boolean
+          title: Malicious
+          description: Indicates that the package is not flagged as malicious.
+          default: false
+        package_name:
+          type: string
+          title: Package Name
+          description: Name of the package that was searched.
+        ecosystem:
+          $ref: '#/components/schemas/EcoSystem'
+          description: Package ecosystem/registry of the package.
+        version:
+          type: string
+          nullable: true
+          title: Version
+          description: Version of the package if provided or available.
+        threat_count:
+          type: integer
+          nullable: true
+          title: Threat Count
+          description: Threat count if provided by the API for non-malicious results.
+        message:
+          type: string
+          nullable: true
+          title: Message
+          description: Informational API message for clean package results.
+      required:
+        - package_name
+        - ecosystem
+    DiscoverPackageResponse:
+      type: object
+      title: DiscoverPackageResponse
+      properties:
+        exist:
+          type: boolean
+          title: Exist
+          description: Indicates whether the package exists
+        package_name:
+          type: string
+          title: Package Name
+          description: The open source package name to check
+        version:
+          type: string
+          title: Version
+          description: The version of the open source package that was checked
+        package_manager:
+          type: string
+          title: Package Manager
+          description: The package manager/ecosystem of the package that was checked
+        organization:
+          type: string
+          title: Organization
+          description: The Snyk organization in which the package was searched
+        snyk_response:
+          allOf:
+            - $ref: '#/components/schemas/SnykDependencySearchResponse'
+          nullable: true
+          description: Optional first-result Snyk dependency response
+      required:
+        - exist
+        - package_name
+        - version
+        - package_manager
+        - organization
+    EcoSystem:
+      type: string
+      enum:
+        - npm
+        - pypi
+        - maven
+        - javascript
+        - nuget
+      title: EcoSystem
+    HTTPValidationError:
+      type: object
+      title: HTTPValidationError
+      properties:
+        detail:
+          type: array
+          title: Detail
+          items:
+            $ref: '#/components/schemas/ValidationError'
+      required:
+        - detail
+    Language:
+      type: string
+      enum:
+        - dotnet
+        - python
+        - java
+        - javascript
+      title: Language
+    MaliciousPackageResponse:
+      type: object
+      title: MaliciousPackageResponse
+      description: Response when a package is found to be malicious.
+      properties:
+        malicious:
+          type: boolean
+          title: Malicious
+          description: Indicates that the package is malicious.
+          default: true
+        package_name:
+          type: string
+          title: Package Name
+          description: Name of the package that was searched.
+        ecosystem:
+          $ref: '#/components/schemas/EcoSystem'
+          description: Package ecosystem/registry of the package.
+        version:
+          type: string
+          nullable: true
+          title: Version
+          description: Version of the package if provided or available.
+        threat_count:
+          type: integer
+          title: Threat Count
+          description: Number of threats associated with the package.
+        details:
+          allOf:
+            - $ref: '#/components/schemas/ThreatDetails'
+          nullable: true
+          description: Detailed information about the detected threat
+      required:
+        - package_name
+        - ecosystem
+        - threat_count
+    SCAEnrichRequest:
+      type: object
+      title: SCAEnrichRequest
+      properties:
+        package_name:
+          type: string
+          title: Package Name
+          description: The open source package name to check
+        ecosystem:
+          $ref: '#/components/schemas/EcoSystem'
+          description: The package ecosystem/registry (e.g., npm, PyPI, Maven, etc.)
+        version:
+          type: string
+          nullable: true
+          title: Version
+          description: The version of the open source package to check
+      required:
+        - package_name
+        - ecosystem
+    SCARequest:
+      type: object
+      title: SCARequest
+      properties:
+        language:
+          allOf:
+            - $ref: '#/components/schemas/Language'
+          description: The programming language/ecosystem of the package (e.g., npm, maven, etc.)
+        package_name:
+          type: string
+          title: Package Name
+          description: The open source package name to check
+        version:
+          type: string
+          title: Version
+          description: The version of the open source package to check
+        business_unit:
+          allOf:
+            - $ref: '#/components/schemas/BusinessUnit'
+          description: The business unit associated with the request
+          default: all
+      required:
+        - language
+        - package_name
+        - version
+    SeverityLevel:
+      type: string
+      enum:
+        - critical
+        - high
+        - medium
+        - low
+      title: SeverityLevel
+    SnykDependencyProject:
+      type: object
+      title: SnykDependencyProject
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Unique identifier for the Snyk project
+        name:
+          type: string
+          title: Name
+          description: Display name of the Snyk project
+      required:
+        - id
+        - name
+    SnykDependencyResult:
+      type: object
+      title: SnykDependencyResult
+      properties:
+        name:
+          type: string
+          title: Name
+          description: Dependency name
+        version:
+          type: string
+          title: Version
+          description: Dependency version
+        type:
+          type: string
+          title: Type
+          description: Package manager or ecosystem type
+        project:
+          allOf:
+            - $ref: '#/components/schemas/SnykDependencyProject'
+          nullable: true
+          description: First project in which this dependency was found
+        isDeprecated:
+          type: boolean
+          nullable: true
+          title: Isdeprecated
+          description: Whether the dependency is deprecated
+      required:
+        - name
+        - version
+        - type
+    SnykDependencySearchResponse:
+      type: object
+      title: SnykDependencySearchResponse
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/SnykDependencyResult'
+          nullable: true
+          description: First dependency returned by the Snyk search
+    ThreatDetails:
+      type: object
+      title: ThreatDetails
+      description: Detailed information about a detected threat.
+      properties:
+        threat_id:
+          type: string
+          title: Threat Id
+          description: Unique identifier for the threat
+        severity_level:
+          allOf:
+            - $ref: '#/components/schemas/SeverityLevel'
+          description: Severity level of the threat
+        description:
+          type: string
+          title: Description
+          description: Detailed description of the threat and its impact
+        version_info:
+          type: string
+          title: Version Info
+          description: Affected versions of the package
+      required:
+        - threat_id
+        - severity_level
+        - description
+        - version_info
+    ValidationError:
+      type: object
+      title: ValidationError
+      properties:
+        loc:
+          type: array
+          title: Location
+          items:
+            anyOf:
+              - type: string
+              - type: integer
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      required:
+        - loc
+        - msg
+        - type
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      scheme: bearer
+      description: Bearer access token validated against AWS Cognito. Protected endpoints require the scope sca-api/ioc.lookup.all.
