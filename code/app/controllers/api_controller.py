@@ -1,5 +1,5 @@
 from typing import Any
-import re
+import asyncio
 
 from app.models.sca import SCARequest, Language
 from app.loggers.runtime_json_logger import logger
@@ -47,10 +47,8 @@ async def opensource_lookup(payload: SCAEnrichRequest) -> PackageSearchResponse:
     )
 
 
-async def webhook_opensource_lookup() -> WebhookOpenSourceResponse:
-    logger.info("Webhook route called")
-    data = await _opensource_client.search_compromised_package(ecosystem="npm")
-
+async def _lookup_ecosystem(ecosystem: str, language: Language) -> list[WebhookMatch]:
+    data = await _opensource_client.search_compromised_package(ecosystem=ecosystem)
     threats = data.get("threats", []) if isinstance(data, dict) else []
     matched_packages: list[WebhookMatch] = []
 
@@ -62,16 +60,17 @@ async def webhook_opensource_lookup() -> WebhookOpenSourceResponse:
 
         discover_result = await _snyk_client.discover_package(
             package_name=package_name,
-            language=Language.javascript,
+            language=language,
             organization="all",
             version=version,
         )
         discover_results = (
             discover_result if isinstance(discover_result, list) else [discover_result]
         )
+        # Provides only the packages that exist in Snyk that are compromised
         existing_results = [result for result in discover_results if result.exist]
-
         if existing_results:
+            # Get a sorted list of affected business units
             affected_business_units = sorted(
                 {result.organization for result in existing_results}
             )
@@ -84,5 +83,24 @@ async def webhook_opensource_lookup() -> WebhookOpenSourceResponse:
                     threat_details=item.get("threat_description"),
                 )
             )
+
+    return matched_packages
+
+
+async def webhook_opensource_lookup() -> WebhookOpenSourceResponse:
+    logger.info("Webhook route called")
+
+    ecosystem_language_map = [
+        ("npm", Language.javascript),
+        ("nuget", Language.dotnet),
+        ("pypi", Language.python),
+    ]
+    # unpack each tuple, from the list above and pass to the _lookup_ecosystem function, then gather results asynchronously.
+    # The * ensures that each returned future from _lookup_ecosystem is unpacked into the results list, which will be a list of lists of WebhookMatch objects. All three futures are awaited and executed concurrently.
+    results = await asyncio.gather(
+        *[_lookup_ecosystem(ecosystem, language) for ecosystem, language in ecosystem_language_map]
+    )
+
+    matched_packages: list[WebhookMatch] = [match for matches in results for match in matches]
 
     return WebhookOpenSourceResponse(count=len(matched_packages), matches=matched_packages)
