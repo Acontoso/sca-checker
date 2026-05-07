@@ -140,7 +140,7 @@ class OpenSourceClient:
         ]
 
         filtered_response = {
-            **json_response,
+            **json_response, #unpacks dictionary and spreads key-value pairs into new dictionary
             "count": len(filtered_threats),
             "threats": filtered_threats,
         } if isinstance(json_response, dict) else {"count": 0, "threats": []}
