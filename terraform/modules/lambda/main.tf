@@ -14,9 +14,12 @@ resource "aws_lambda_function" "lambda" {
   }
   environment {
     variables = {
-      COGNITO_REGION         = var.cognito_region
-      COGNITO_USER_POOL_ID   = var.cognito_user_pool_id
-      COGNITO_REQUIRED_SCOPE = var.cognito_required_scope
+      COGNITO_REGION                 = var.cognito_region
+      COGNITO_USER_POOL_ID           = var.cognito_user_pool_id
+      COGNITO_REQUIRED_SCOPE         = var.cognito_required_scope
+      OPENSOURCE_DYNAMODB_TABLE_NAME = var.opensource_dynamodb_table_name
+      OPENSOURCE_DYNAMODB_HASH_KEY   = var.opensource_dynamodb_hash_key
+      OPENSOURCE_DYNAMODB_RANGE_KEY  = var.opensource_dynamodb_range_key
     }
   }
 }

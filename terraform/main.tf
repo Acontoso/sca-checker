@@ -58,19 +58,30 @@ module "cognito" {
   cognito_oidc_client_app    = var.cognito_oidc_client_app
 }
 
+module "opensource_dynamodb" {
+  source                         = "./modules/dynamodb"
+  tags                           = local.tags
+  opensource_dynamodb_table_name = var.opensource_dynamodb_table_name
+  opensource_dynamodb_hash_key   = var.opensource_dynamodb_hash_key
+  opensource_dynamodb_range_key  = var.opensource_dynamodb_range_key
+}
+
 module "lambda" {
-  source                 = "./modules/lambda"
-  tags                   = local.tags
-  lambda_function_name   = var.lambda_function_name
-  runtime                = var.runtime
-  handler                = var.handler
-  memory_size            = var.memory_size
-  timeout                = var.timeout
-  description            = var.description
-  sns_topic_arn          = module.sns.sns_arn
-  cognito_region         = local.aws_region
-  cognito_user_pool_id   = module.cognito.aws_cognito_user_pool_id
-  cognito_required_scope = "sca-api/ioc.lookup.all"
+  source                         = "./modules/lambda"
+  tags                           = local.tags
+  lambda_function_name           = var.lambda_function_name
+  runtime                        = var.runtime
+  handler                        = var.handler
+  memory_size                    = var.memory_size
+  timeout                        = var.timeout
+  description                    = var.description
+  sns_topic_arn                  = module.sns.sns_arn
+  cognito_region                 = local.aws_region
+  cognito_user_pool_id           = module.cognito.aws_cognito_user_pool_id
+  cognito_required_scope         = "sca-api/ioc.lookup.all"
+  opensource_dynamodb_table_name = var.opensource_dynamodb_table_name
+  opensource_dynamodb_hash_key   = var.opensource_dynamodb_hash_key
+  opensource_dynamodb_range_key  = var.opensource_dynamodb_range_key
 }
 
 module "apigateway" {

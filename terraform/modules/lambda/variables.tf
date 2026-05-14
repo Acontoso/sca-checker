@@ -59,3 +59,18 @@ variable "ssm_param_path_api_key" {
   description = "Path of the SSM parameter that contains the API key"
   default     = "/snyk_token/*"
 }
+
+variable "opensource_dynamodb_table_name" {
+  type        = string
+  description = "Name of DynamoDB table for IOCs"
+}
+
+variable "opensource_dynamodb_hash_key" {
+  type        = string
+  description = "DynamoDB sort key for IOCs"
+}
+
+variable "opensource_dynamodb_range_key" {
+  type        = string
+  description = "DynamoDB partition key for IOCs"
+}

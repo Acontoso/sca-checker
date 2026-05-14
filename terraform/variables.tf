@@ -147,3 +147,18 @@ variable "audience_values" {
   type        = list(string)
   description = "List of audience values used for authentication to the gateway"
 }
+
+variable "opensource_dynamodb_table_name" {
+  type        = string
+  description = "Name of DynamoDB table for IOCs"
+}
+
+variable "opensource_dynamodb_hash_key" {
+  type        = string
+  description = "DynamoDB sort key for IOCs"
+}
+
+variable "opensource_dynamodb_range_key" {
+  type        = string
+  description = "DynamoDB partition key for IOCs"
+}

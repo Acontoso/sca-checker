@@ -1,15 +1,17 @@
 import asyncio
 import os
 import re
+import time
 from typing import Any
 import httpx
 from app.models.opensource import (
     PackageSearchResponse,
     MaliciousPackageResponse,
     CleanPackageResponse,
+    ThreatDetails,
 )
 from app.loggers.runtime_json_logger import logger
-from app.services.runtime import aws_client
+from app.services.runtime import aws_client, dynamodb_client
 
 BASE_URL = "https://api.opensourcemalware.com"
 DEFAULT_REGION = "ap-southeast-2"
@@ -17,6 +19,12 @@ DEFAULT_TIMEOUT_SECONDS = 15
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BACKOFF_FACTOR = 0.5
 _RETRY_STATUS_CODES = (429, 500, 502, 503, 504)
+
+OPEN_TABLE_NAME = os.getenv("OPENSOURCE_DYNAMODB_TABLE_NAME")
+OPEN_HASH_KEY = os.getenv("OPENSOURCE_DYNAMODB_HASH_KEY")
+OPEN_RANGE_KEY = os.getenv("OPENSOURCE_DYNAMODB_RANGE_KEY")
+
+TTL = 3
 
 
 class OpenSourceClient:
@@ -102,6 +110,35 @@ class OpenSourceClient:
         logger.info(
             f"Searching for package: {package_name}, ecosystem: {ecosystem}, version: {version}"
         )
+        db_return_chk = await dynamodb_client.get_item(
+            table_name=OPEN_TABLE_NAME,
+            key={
+                OPEN_HASH_KEY: package_name,
+                OPEN_RANGE_KEY: ecosystem,
+            },
+        )
+        if db_return_chk is not None:
+            metadata: dict[str, Any] = db_return_chk.get("metadata", {})
+            if db_return_chk.get("malicious"):
+                threat_details_raw = metadata.get("threat_details")
+                return MaliciousPackageResponse(
+                    package_name=package_name,
+                    ecosystem=ecosystem,
+                    version=db_return_chk.get("version"),
+                    malicious=True,
+                    threat_count=metadata.get("threat_count", 0),
+                    details=ThreatDetails.model_validate(threat_details_raw) if threat_details_raw else None,
+                )
+            else:
+                return CleanPackageResponse(
+                    package_name=package_name,
+                    ecosystem=ecosystem,
+                    version=db_return_chk.get("version"),
+                    malicious=False,
+                    threat_count=metadata.get("threat_count"),
+                    message=metadata.get("message"),
+                )
+
         payload = {
             "package_name": package_name,
             "ecosystem": ecosystem,
@@ -112,9 +149,34 @@ class OpenSourceClient:
             "/functions/v1/check-package-malicious", payload
         )
         if json_response.get("malicious"):
-            return MaliciousPackageResponse.model_validate(json_response)
+            result: PackageSearchResponse = MaliciousPackageResponse.model_validate(json_response)
         else:
-            return CleanPackageResponse.model_validate(json_response)
+            result = CleanPackageResponse.model_validate(json_response)
+
+        metadata = {}
+        if isinstance(result, MaliciousPackageResponse):
+            metadata["threat_count"] = result.threat_count
+            if result.details is not None:
+                metadata["threat_details"] = result.details.model_dump()
+        else:
+            if result.threat_count is not None:
+                metadata["threat_count"] = result.threat_count
+            if result.message is not None:
+                metadata["message"] = result.message
+
+        expires_at = int(time.time()) + (TTL * 24 * 60 * 60)
+        await dynamodb_client.put_item(
+            table_name=OPEN_TABLE_NAME,
+            item={
+                OPEN_HASH_KEY: package_name,
+                OPEN_RANGE_KEY: ecosystem,
+                "version": result.version,
+                "malicious": result.malicious,
+                "metadata": metadata,
+                "expires_at": expires_at,
+            },
+        )
+        return result
         
     async def search_compromised_package(
         self, ecosystem: str
