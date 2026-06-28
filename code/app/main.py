@@ -3,15 +3,22 @@ from fastapi.exceptions import RequestValidationError
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from contextlib import asynccontextmanager
 from app.middleware.request_response_logger import RequestResponseLoggingMiddleware
 from app.loggers.runtime_json_logger import logger
 from app.routes.api import router as api_router
 from app.models.error import ErrorResponse
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    pass
+    # app.state.db = db_client_create()
+
 app = FastAPI(
     title="FastAPI Lambda - API for Software Composition checks",
     version="0.1.0",
     description="A starter FastAPI service that can run on AWS Lambda via Mangum.",
+    lifespan=lifespan
 )
 
 app.add_middleware(RequestResponseLoggingMiddleware)

@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Security
+from fastapi import APIRouter, Security, Request, Query, Depends
 from app.models.sca import SCARequest
 from app.controllers.api_controller import health_check, snyk_lookup, opensource_lookup, webhook_opensource_lookup
 from app.models.snyk import DiscoverPackageResponse
@@ -51,3 +51,18 @@ async def sca_enrich_route(
     ),
 ) -> PackageSearchResponse:
     return await opensource_lookup(payload)
+
+# def _test(request: Request) -> type:
+#     """
+#     This is a test function to demonstrate how to access the request object in a FastAPI route, and how to return an async context manager that yields a value. In this case, it simply returns the type of the request object. Can be used by subsequent routes to access async context manager objects like DB connections etc.
+#     """
+#     return request.app.state.type
+
+# @router.get("/test", response_model=type)
+# def _test2(
+#     request: Request, #raw ASGI request object
+#     body: type, # Parsed from JSON request body
+#     svc: type = Depends(_func), # Dependancy injection, calls function before passing to decorator function
+#     cont_manager: type = Depends(_test)
+# ):
+#     pass
